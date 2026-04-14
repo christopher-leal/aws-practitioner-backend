@@ -43,12 +43,38 @@ export class ProductServiceStack extends cdk.Stack {
     const getProductsListIntegration = new apigateway.LambdaIntegration(
       getProductsLambdaFunction,
       {
-        integrationResponses: [{ statusCode: "200" }, { statusCode: "404" }],
+        integrationResponses: [
+          {
+            statusCode: "200",
+            responseParameters: {
+              "method.response.header.Access-Control-Allow-Origin": "'*'",
+            },
+          },
+          {
+            statusCode: "404",
+            responseParameters: {
+              "method.response.header.Access-Control-Allow-Origin": "'*'",
+            },
+          },
+        ],
         proxy: false,
       },
     );
     productsResource.addMethod("GET", getProductsListIntegration, {
-      methodResponses: [{ statusCode: "200" }, { statusCode: "404" }],
+      methodResponses: [
+        {
+          statusCode: "200",
+          responseParameters: {
+            "method.response.header.Access-Control-Allow-Origin": true,
+          },
+        },
+        {
+          statusCode: "404",
+          responseParameters: {
+            "method.response.header.Access-Control-Allow-Origin": true,
+          },
+        },
+      ],
     });
     productsResource.addCorsPreflight({
       allowOrigins: [
@@ -66,6 +92,9 @@ export class ProductServiceStack extends cdk.Stack {
         integrationResponses: [
           {
             statusCode: "200",
+            responseParameters: {
+              "method.response.header.Access-Control-Allow-Origin": "'*'",
+            },
           },
           {
             selectionPattern: ".*[NotFound].*",
@@ -75,6 +104,9 @@ export class ProductServiceStack extends cdk.Stack {
                 message:
                   "$util.parseJson($input.path('$.errorMessage')).message",
               }),
+            },
+            responseParameters: {
+              "method.response.header.Access-Control-Allow-Origin": "'*'",
             },
           },
         ],
@@ -88,7 +120,20 @@ export class ProductServiceStack extends cdk.Stack {
       },
     );
     productByIdResource.addMethod("GET", getProductsByIdIntegration, {
-      methodResponses: [{ statusCode: "200" }, { statusCode: "404" }],
+      methodResponses: [
+        {
+          statusCode: "200",
+          responseParameters: {
+            "method.response.header.Access-Control-Allow-Origin": true,
+          },
+        },
+        {
+          statusCode: "404",
+          responseParameters: {
+            "method.response.header.Access-Control-Allow-Origin": true,
+          },
+        },
+      ],
       requestParameters: {
         "method.request.path.id": true,
       },
