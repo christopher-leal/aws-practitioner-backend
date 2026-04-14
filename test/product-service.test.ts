@@ -20,30 +20,30 @@ jest.mock("../lib/product-service-stack/mockProducts", () => ({
 }));
 
 describe("getProductsList", () => {
-  it("returns all products wrapped in a data key", async () => {
+  it("returns all products as an array", async () => {
     const result = await getProductsList();
 
-    expect(result).toEqual({ data: products });
+    expect(result).toEqual([...products]);
   });
 
   it("returns an array with the correct number of products", async () => {
     const result = await getProductsList();
 
-    expect(result.data).toHaveLength(2);
+    expect(result).toHaveLength(2);
   });
 });
 
 describe("getProductsById", () => {
-  it("returns the matching product wrapped in a data key", async () => {
+  it("returns the matching product as a flat object", async () => {
     const result = await getProductsById({ id: "id-1" });
 
-    expect(result).toEqual({ data: products[0] });
+    expect(result).toEqual({ ...products[0] });
   });
 
   it("returns a different product when a different id is provided", async () => {
     const result = await getProductsById({ id: "id-2" });
 
-    expect(result).toEqual({ data: products[1] });
+    expect(result).toEqual({ ...products[1] });
   });
 
   it("throws a [NotFound] error when the product does not exist", async () => {

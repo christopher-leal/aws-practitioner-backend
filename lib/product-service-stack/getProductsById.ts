@@ -13,6 +13,6 @@ export async function main(event: any) {
   }
 
   return {
-    data: product,
+    ...product,
   };
 }

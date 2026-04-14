@@ -32,22 +32,18 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/Product"
+                type: array
+                items:
+                  $ref: "#/components/schemas/Product"
               example:
-                data:
-                  - id: "6023a861-92ec-430d-81a9-d66dc8e5f8ca"
-                    title: "Wireless Noise-Cancelling Headphones"
-                    description: "Over-ear headphones with active noise cancellation and 30-hour battery life."
-                    price: 299.99
-                  - id: "d2a69d18-59f7-4ae3-80a5-6b45843db835"
-                    title: "Mechanical Keyboard"
-                    description: "Tenkeyless mechanical keyboard with Cherry MX switches and RGB backlight."
-                    price: 129.99
+                - id: "6023a861-92ec-430d-81a9-d66dc8e5f8ca"
+                  title: "Wireless Noise-Cancelling Headphones"
+                  description: "Over-ear headphones with active noise cancellation and 30-hour battery life."
+                  price: 299.99
+                - id: "d2a69d18-59f7-4ae3-80a5-6b45843db835"
+                  title: "Mechanical Keyboard"
+                  description: "Tenkeyless mechanical keyboard with Cherry MX switches and RGB backlight."
+                  price: 129.99
         "404":
           description: No products found
           content:
@@ -73,20 +69,16 @@ paths:
           example: "6023a861-92ec-430d-81a9-d66dc8e5f8ca"
       responses:
         "200":
-          description: The product matching the given ID
+          description: The product matching the given ID as a flat object
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    $ref: "#/components/schemas/Product"
+                $ref: "#/components/schemas/Product"
               example:
-                data:
-                  id: "6023a861-92ec-430d-81a9-d66dc8e5f8ca"
-                  title: "Wireless Noise-Cancelling Headphones"
-                  description: "Over-ear headphones with active noise cancellation and 30-hour battery life."
-                  price: 299.99
+                id: "6023a861-92ec-430d-81a9-d66dc8e5f8ca"
+                title: "Wireless Noise-Cancelling Headphones"
+                description: "Over-ear headphones with active noise cancellation and 30-hour battery life."
+                price: 299.99
         "404":
           description: Product not found
           content:
