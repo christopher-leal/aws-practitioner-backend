@@ -5,17 +5,18 @@
     "aws-practitioner-backend": "bin/aws-practitioner-backend.js"
   },
   "scripts": {
-    "build": "tsc",
-    "watch": "tsc -w",
+    "build": "./node_modules/.bin/tsc",
+    "watch": "./node_modules/.bin/tsc -w",
     "test": "jest",
-    "cdk": "cdk"
+    "cdk": "./node_modules/.bin/cdk",
+    "cdk:deploy": "npm run build && ./node_modules/.bin/cdk deploy --require-approval never --all"
   },
   "devDependencies": {
     "@types/jest": "^30",
-    "@types/node": "^24.10.1",
+    "@types/node": "^24.12.2",
+    "aws-cdk": "2.1117.0",
     "jest": "^30",
     "ts-jest": "^29",
-    "aws-cdk": "2.1117.0",
     "ts-node": "^10.9.2",
     "typescript": "~5.9.3"
   },
