@@ -7,3 +7,6 @@ node_modules
 .cdk.staging
 cdk.out
 /dist
+
+# Environment variables — never commit
+.env
