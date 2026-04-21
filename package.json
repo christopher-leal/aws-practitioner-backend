@@ -9,7 +9,8 @@
     "watch": "./node_modules/.bin/tsc -w",
     "test": "jest",
     "cdk": "./node_modules/.bin/cdk",
-    "cdk:deploy": "npm run build && ./node_modules/.bin/cdk deploy --require-approval never --all"
+    "cdk:deploy": "npm run build && ./node_modules/.bin/cdk deploy --require-approval never --all",
+    "seed": "npm run build && node dist/scripts/seed-dynamodb.js"
   },
   "devDependencies": {
     "@types/jest": "^30",
@@ -23,6 +24,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.1033.0",
+    "@aws-sdk/lib-dynamodb": "^3.1033.0",
     "@types/aws-lambda": "^8.10.161",
     "aws-cdk-lib": "^2.247.0",
     "aws-lambda": "^1.0.7",
