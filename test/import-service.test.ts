@@ -1,17 +1,13 @@
-// Mock the S3 client and presigner before importing the handler
-jest.mock('@aws-sdk/client-s3', () => {
-  return {
-    S3Client: jest.fn().mockImplementation(() => ({})),
-    PutObjectCommand: jest.fn().mockImplementation((input) => ({ input })),
-  };
-});
+import { mockClient } from 'aws-sdk-client-mock';
+import 'aws-sdk-client-mock-jest';
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { main, ImportEvent, s3Client } from '../lib/product-service-stack/importProductsFile';
 
-const mockGetSignedUrl = jest.fn();
-jest.mock('@aws-sdk/s3-request-presigner', () => ({
-  getSignedUrl: mockGetSignedUrl,
-}));
+jest.mock('@aws-sdk/s3-request-presigner');
 
-import { main, ImportEvent } from '../lib/product-service-stack/importProductsFile';
+const s3Mock = mockClient(s3Client);
+const mockGetSignedUrl = getSignedUrl as jest.MockedFunction<typeof getSignedUrl>;
 
 const makeEvent = (queryParams?: Record<string, string>): ImportEvent =>
   ({
@@ -19,6 +15,7 @@ const makeEvent = (queryParams?: Record<string, string>): ImportEvent =>
   });
 
 beforeEach(() => {
+  s3Mock.reset();
   jest.clearAllMocks();
   process.env.BUCKET_NAME = 'test-bucket';
   process.env.AWS_REGION = 'us-east-1';
@@ -50,15 +47,21 @@ describe('importProductsFile', () => {
       expect(result).toBe('https://signed-url.example.com/uploaded/products.csv');
     });
 
-    it('calls getSignedUrl with the uploaded/ key prefix', async () => {
+    it('calls getSignedUrl with a PutObjectCommand for the uploaded/ key prefix', async () => {
       await main(makeEvent({ name: 'products.csv' }));
 
-      expect(mockGetSignedUrl).toHaveBeenCalledTimes(1);
       const [, command] = mockGetSignedUrl.mock.calls[0];
+      expect(command).toBeInstanceOf(PutObjectCommand);
       expect(command.input).toMatchObject({
         Bucket: 'test-bucket',
         Key: 'uploaded/products.csv',
       });
+    });
+
+    it('calls getSignedUrl once', async () => {
+      await main(makeEvent({ name: 'products.csv' }));
+
+      expect(mockGetSignedUrl).toHaveBeenCalledTimes(1);
     });
 
     it('returns a signed URL for any valid file name', async () => {
@@ -67,7 +70,8 @@ describe('importProductsFile', () => {
       const result = await main(makeEvent({ name: 'other.csv' }));
 
       expect(result).toBe('https://signed-url.example.com/uploaded/other.csv');
-      expect(mockGetSignedUrl.mock.calls[0][1].input.Key).toBe('uploaded/other.csv');
+      const [, command] = mockGetSignedUrl.mock.calls[0];
+      expect(command.input).toMatchObject({ Key: 'uploaded/other.csv' });
     });
   });
 });
