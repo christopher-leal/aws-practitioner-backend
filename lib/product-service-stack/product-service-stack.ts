@@ -1,13 +1,19 @@
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as apigateway from "aws-cdk-lib/aws-apigateway";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
+import * as sqs from "aws-cdk-lib/aws-sqs";
+import * as sns from "aws-cdk-lib/aws-sns";
+import * as snsSubscriptions from "aws-cdk-lib/aws-sns-subscriptions";
 import * as cdk from "aws-cdk-lib";
 import * as path from "path";
 import { Construct } from "constructs";
+import { SqsEventSource } from "aws-cdk-lib/aws-lambda-event-sources";
 
 const lambdaPath = path.join(__dirname, "../../dist/lib/product-service-stack");
 
 export class ProductServiceStack extends cdk.Stack {
+  public readonly catalogItemsQueue: sqs.Queue;
+
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
@@ -30,6 +36,77 @@ export class ProductServiceStack extends cdk.Stack {
       PRODUCTS_TABLE_NAME: productsTable.tableName,
       STOCK_TABLE_NAME: stockTable.tableName,
     };
+
+    // SQS Queue
+    this.catalogItemsQueue = new sqs.Queue(this, "catalogItemsQueue", {
+      queueName: "catalogItemsQueue",
+      visibilityTimeout: cdk.Duration.seconds(30),
+    });
+
+    // SNS Topic
+    const createProductTopic = new sns.Topic(this, "createProductTopic", {
+      topicName: "createProductTopic",
+    });
+
+    // Primary subscription — products with price >= 100
+    createProductTopic.addSubscription(
+      new snsSubscriptions.EmailSubscription("christopher_leal@epam.com", {
+        filterPolicy: {
+          price: sns.SubscriptionFilter.numericFilter({
+            greaterThanOrEqualTo: 100,
+          }),
+        },
+      }),
+    );
+
+    // Secondary subscription — products with price < 100 (budget items)
+    createProductTopic.addSubscription(
+      new snsSubscriptions.EmailSubscription(
+        "christopher_leal+budget@epam.com",
+        {
+          filterPolicy: {
+            price: sns.SubscriptionFilter.numericFilter({
+              lessThan: 100,
+            }),
+          },
+        },
+      ),
+    );
+
+    // catalogBatchProcess lambda
+    const catalogBatchProcessLambda = new lambda.Function(
+      this,
+      "catalogBatchProcess",
+      {
+        runtime: lambda.Runtime.NODEJS_20_X,
+        memorySize: 1024,
+        timeout: cdk.Duration.seconds(30),
+        handler: "catalogBatchProcess.main",
+        code: lambda.Code.fromAsset(lambdaPath),
+        environment: {
+          ...commonEnv,
+          SNS_TOPIC_ARN: createProductTopic.topicArn,
+        },
+      },
+    );
+
+    productsTable.grantWriteData(catalogBatchProcessLambda);
+    stockTable.grantWriteData(catalogBatchProcessLambda);
+    createProductTopic.grantPublish(catalogBatchProcessLambda);
+
+    catalogBatchProcessLambda.addEventSource(
+      new SqsEventSource(this.catalogItemsQueue, { batchSize: 5 }),
+    );
+
+    new cdk.CfnOutput(this, "CatalogItemsQueueUrl", {
+      value: this.catalogItemsQueue.queueUrl,
+      description: "Catalog Items SQS Queue URL",
+    });
+
+    new cdk.CfnOutput(this, "CatalogItemsQueueArn", {
+      value: this.catalogItemsQueue.queueArn,
+      description: "Catalog Items SQS Queue ARN",
+    });
 
     // Lambda Functions
     const getProductsLambdaFunction = new lambda.Function(
