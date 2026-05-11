@@ -1,16 +1,21 @@
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as s3notifications from 'aws-cdk-lib/aws-s3-notifications';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
+import * as sqs from 'aws-cdk-lib/aws-sqs';
 import * as cdk from 'aws-cdk-lib';
 import * as path from 'path';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { Runtime } from 'aws-cdk-lib/aws-lambda';
 import { Construct } from 'constructs';
 
+interface ImportServiceStackProps extends cdk.StackProps {
+  catalogItemsQueue: sqs.IQueue;
+}
+
 const handlersPath = path.join(__dirname);
 
 export class ImportServiceStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+  constructor(scope: Construct, id: string, props: ImportServiceStackProps) {
     super(scope, id, props);
 
     const bucket = new s3.Bucket(this, 'ImportBucket', {
@@ -46,9 +51,13 @@ export class ImportServiceStack extends cdk.Stack {
       entry: path.join(handlersPath, 'importFileParser.ts'),
       handler: 'main',
       bundling: { forceDockerBundling: false },
+      environment: {
+        SQS_QUEUE_URL: props.catalogItemsQueue.queueUrl,
+      },
     });
 
     bucket.grantReadWrite(importFileParserLambda);
+    props.catalogItemsQueue.grantSendMessages(importFileParserLambda);
 
     bucket.addEventNotification(
       s3.EventType.OBJECT_CREATED,

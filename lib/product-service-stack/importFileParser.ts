@@ -4,11 +4,13 @@ import {
   CopyObjectCommand,
   DeleteObjectCommand,
 } from '@aws-sdk/client-s3';
+import { SQSClient, SendMessageCommand } from '@aws-sdk/client-sqs';
 import { S3Event } from 'aws-lambda';
 import { Readable } from 'stream';
 import csv from 'csv-parser';
 
 export const s3Client = new S3Client({ region: process.env.AWS_REGION });
+export const sqsClient = new SQSClient({ region: process.env.AWS_REGION });
 
 export const main = async (event: S3Event): Promise<void> => {
   for (const record of event.Records) {
@@ -21,16 +23,29 @@ export const main = async (event: S3Event): Promise<void> => {
       new GetObjectCommand({ Bucket: bucket, Key: key }),
     );
 
+    const records: Record<string, string>[] = [];
+
     await new Promise<void>((resolve, reject) => {
       const stream = response.Body as Readable;
       stream
         .pipe(csv())
         .on('data', (data: Record<string, string>) => {
-          console.log('Parsed record:', JSON.stringify(data));
+          records.push(data);
         })
         .on('error', reject)
         .on('end', resolve);
     });
+
+    await Promise.all(
+      records.map((csvRecord) =>
+        sqsClient.send(
+          new SendMessageCommand({
+            QueueUrl: process.env.SQS_QUEUE_URL!,
+            MessageBody: JSON.stringify(csvRecord),
+          }),
+        ),
+      ),
+    );
 
     const parsedKey = key.replace('uploaded/', 'parsed/');
 
