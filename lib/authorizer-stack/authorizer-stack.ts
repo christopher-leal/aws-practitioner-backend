@@ -3,36 +3,47 @@ import * as apigateway from "aws-cdk-lib/aws-apigateway";
 import * as cognito from "aws-cdk-lib/aws-cognito";
 import * as cdk from "aws-cdk-lib";
 import * as path from "path";
+import { NodejsFunction } from "aws-cdk-lib/aws-lambda-nodejs";
 import { Construct } from "constructs";
+import * as dotenv from "dotenv";
 
+const lambdaPath = path.join(__dirname);
 export class AuthorizerStack extends cdk.Stack {
+  public readonly basicAuthorizerFunction: lambda.IFunction;
+  public readonly userPool: cognito.UserPool;
+
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
-    const lambdaFunction = new lambda.Function(this, "lambda-function", {
+    // Load credentials from .env file (never committed to git)
+    const envConfig = dotenv.config();
+
+    const envVars: Record<string, string> = {};
+    if (envConfig.parsed) {
+      for (const [key, value] of Object.entries(envConfig.parsed)) {
+        // Lambda env var names cannot contain hyphens; replace with underscores
+        envVars[key.replace(/-/g, "_")] = value;
+      }
+    }
+
+    this.basicAuthorizerFunction = new NodejsFunction(this, "basicAuthorizer", {
       runtime: lambda.Runtime.NODEJS_20_X,
-      memorySize: 1024,
+      memorySize: 256,
       timeout: cdk.Duration.seconds(5),
-      handler: "handler.main",
-      code: lambda.Code.fromAsset(path.join(__dirname, "./")),
+      entry: path.join(lambdaPath, "basicAuthorizer.ts"),
+      handler: "main",
+      bundling: { forceDockerBundling: false },
+      environment: envVars,
     });
 
-    const userPool = new cognito.UserPool(this, "my-user-pool", {
-      signInAliases: {
-        email: true,
-      },
-      autoVerify: {
-        email: true,
-      },
+    // ── Cognito User Pool ──────────────────────────────────────────────────────
+    this.userPool = new cognito.UserPool(this, "UserPool", {
+      userPoolName: "cloudx-user-pool",
+      selfSignUpEnabled: true,
+      signInAliases: { email: true },
+      autoVerify: { email: true },
       standardAttributes: {
-        familyName: {
-          mutable: true,
-          required: true,
-        },
-        phoneNumber: { required: false },
-      },
-      customAttributes: {
-        createdAt: new cognito.DateTimeAttribute(),
+        email: { required: true, mutable: true },
       },
       passwordPolicy: {
         minLength: 8,
@@ -44,54 +55,65 @@ export class AuthorizerStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
-    const appClient = userPool.addClient("my-app-client", {
-      userPoolClientName: "my-app-client",
-      authFlows: {
-        userPassword: true,
-      },
-    });
+    const callbackUrls = [
+      "https://d2i4ewulasiv4x.cloudfront.net/",
+      "http://localhost:3000/",
+    ];
 
-    const domain = userPool.addDomain("Domain", {
-      cognitoDomain: {
-        domainPrefix: "authorization",
-      },
-    });
-
-    const api = new apigateway.RestApi(this, "my-api", {
-      restApiName: "My API Gateway",
-      description: "This API serves the Lambda functions.",
-    });
-
-    const authorizer = new apigateway.CognitoUserPoolsAuthorizer(
-      this,
-      "my-authorizer",
-      {
-        authorizerName: "my-authorizer",
-        cognitoUserPools: [userPool],
-      },
-    );
-
-    const helloFromLambdaIntegration = new apigateway.LambdaIntegration(
-      lambdaFunction,
-      {
-        requestTemplates: {
-          "application/json": `{ "message": "$input.params('message')" }`,
+    const appClient = this.userPool.addClient("WebAppClient", {
+      userPoolClientName: "web-app-client",
+      supportedIdentityProviders: [
+        cognito.UserPoolClientIdentityProvider.COGNITO,
+      ],
+      oAuth: {
+        flows: {
+          authorizationCodeGrant: true,
+          implicitCodeGrant: true, // allows id_token in URL for SPA testing
         },
-        integrationResponses: [
-          {
-            statusCode: "200",
-          },
+        scopes: [
+          cognito.OAuthScope.OPENID,
+          cognito.OAuthScope.EMAIL,
+          cognito.OAuthScope.PROFILE,
+          cognito.OAuthScope.PHONE,
+          cognito.OAuthScope.COGNITO_ADMIN,
         ],
-        proxy: false,
+        callbackUrls,
+        logoutUrls: callbackUrls,
       },
-    );
+    });
 
-    // Create a resource /hello and GET request under it
-    const helloResource = api.root.addResource("hello");
-    // On this resource attach a GET method which pass request to our Lambda function
-    helloResource.addMethod("GET", helloFromLambdaIntegration, {
-      methodResponses: [{ statusCode: "200" }],
-      authorizer,
+    const domain = this.userPool.addDomain("UserPoolDomain", {
+      cognitoDomain: { domainPrefix: "cloudx-christopher-leal" },
+    });
+    // Use response_type=token (implicit flow) so id_token appears in the URL
+    // hash after sign-in — the SPA reads it from window.location.hash.
+    // domain.signInUrl() hardcodes response_type=code, so we build manually.
+    const buildLoginUrl = (redirectUri: string) =>
+      `${domain.baseUrl()}/login` +
+      `?client_id=${appClient.userPoolClientId}` +
+      `&response_type=token` +
+      `&scope=openid+email+profile` +
+      `&redirect_uri=${encodeURIComponent(redirectUri)}`;
+
+    new cdk.CfnOutput(this, "UserPoolId", {
+      value: this.userPool.userPoolId,
+      description: "Cognito User Pool ID",
+    });
+
+    new cdk.CfnOutput(this, "UserPoolClientId", {
+      value: appClient.userPoolClientId,
+      description: "Cognito App Client ID",
+    });
+
+    new cdk.CfnOutput(this, "HostedUiLoginUrl", {
+      value: buildLoginUrl(callbackUrls[0]),
+      description:
+        "Cognito Hosted UI Login URL (implicit flow) — id_token appears in URL hash after sign-in",
+    });
+
+    new cdk.CfnOutput(this, "HostedUiLoginUrlLocal", {
+      value: buildLoginUrl(callbackUrls[1]),
+      description: "Cognito Hosted UI Login URL for localhost development",
     });
   }
 }

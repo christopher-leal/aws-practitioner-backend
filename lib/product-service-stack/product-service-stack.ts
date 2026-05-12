@@ -4,6 +4,7 @@ import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import * as sqs from "aws-cdk-lib/aws-sqs";
 import * as sns from "aws-cdk-lib/aws-sns";
 import * as snsSubscriptions from "aws-cdk-lib/aws-sns-subscriptions";
+import * as cognito from "aws-cdk-lib/aws-cognito";
 import * as cdk from "aws-cdk-lib";
 import * as path from "path";
 import { Construct } from "constructs";
@@ -11,10 +12,14 @@ import { SqsEventSource } from "aws-cdk-lib/aws-lambda-event-sources";
 
 const lambdaPath = path.join(__dirname, "../../dist/lib/product-service-stack");
 
+interface ProductServiceStackProps extends cdk.StackProps {
+  cognitoUserPool?: cognito.IUserPool;
+}
+
 export class ProductServiceStack extends cdk.Stack {
   public readonly catalogItemsQueue: sqs.Queue;
 
-  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+  constructor(scope: Construct, id: string, props?: ProductServiceStackProps) {
     super(scope, id, props);
 
     // DynamoDB Tables
@@ -161,6 +166,15 @@ export class ProductServiceStack extends cdk.Stack {
       description: "This service serves products.",
     });
 
+    // Optional Cognito authorizer for getProductsList
+    const cognitoAuthorizer = props?.cognitoUserPool
+      ? new apigateway.CognitoUserPoolsAuthorizer(this, "CognitoAuthorizer", {
+          authorizerName: "CognitoAuthorizer",
+          cognitoUserPools: [props.cognitoUserPool],
+          identitySource: "method.request.header.Authorization",
+        })
+      : undefined;
+
     const productsResource = api.root.addResource("products");
 
     // GET /products
@@ -200,6 +214,10 @@ export class ProductServiceStack extends cdk.Stack {
           },
         },
       ],
+      ...(cognitoAuthorizer && {
+        authorizer: cognitoAuthorizer,
+        authorizationType: apigateway.AuthorizationType.COGNITO,
+      }),
     });
 
     // POST /products
