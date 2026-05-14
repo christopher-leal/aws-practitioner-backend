@@ -5,6 +5,7 @@ import { ImportServiceStack } from "../lib/product-service-stack/import-service-
 import { ProductSqsStack } from "../lib/product-sqs/product-sqs-stack";
 import { ProductSnsStack } from "../lib/product-sns/product-sns-stack";
 import { AuthorizerStack } from "../lib/authorizer-stack/authorizer-stack";
+import { CartServiceStack } from "../lib/cart-service-stack/cart-service-stack";
 
 const app = new cdk.App();
 
@@ -22,3 +23,5 @@ new ImportServiceStack(app, "ImportServiceStack", {
 new ProductSqsStack(app, "ProductSqsStack");
 
 new ProductSnsStack(app, "ProductSnsStack");
+
+new CartServiceStack(app, "CartServiceStack");
